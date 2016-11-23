@@ -28,6 +28,50 @@
 #include "xAODTrigMissingET/TrigMissingETContainer.h"
 #include "xAODBTagging/BTaggingContainer.h"
 
+#include "xAODEgamma/ElectronContainer.h"
+
+
+void singleElectronTriggerAnalysis(asg::SgTEvent& event, Trig::TrigDecisionTool& tdt, Trig::MatchingTool& matchtool){
+  if(! tdt.isPassed("HLT_e14_tight")){
+    std::cout << "single electron trigger did not pass.. " << std::endl;
+    return;
+  }
+  std::cout << "single el passed" << std::endl;
+
+  const xAOD::ElectronContainer* els = 0;
+  event.retrieve(els,"Electrons");
+  ::Info("singleElectronTrigger", "There are %i electrons in the event", els->size());
+  
+  int i = 0;
+  for(auto x : *els){
+    bool matched = matchtool.match(*x,"HLT_e14_tight",0.1);
+    std::cout << "electron " << i << " matched? " << matched << std::endl;
+    i++;
+  }
+}
+
+void diLeptonTriggerAnalysis(asg::SgTEvent& event, Trig::TrigDecisionTool& tdt, Trig::IMatchingTool& matchtool){
+  std::string chain_name("HLT_2e17_loose");
+  if(! tdt.isPassed(chain_name)){
+    std::cout << "di-electron trigger did not pass.. " << std::endl;
+    return;
+  }  
+  std::cout << "di el passed" << std::endl;
+
+  const xAOD::ElectronContainer* els = 0;
+  event.retrieve(els,"Electrons");
+  ::Info("diLeptonTriggerAnalysis", "There are %i electrons in the event", els->size());
+
+  for(int i = 0;i < els->size(); ++i){
+    for(int j = i+1; j < els->size(); ++j){
+      std::cout << "contructing pair from indices: i: " << i << " j: " << j << std::endl;
+      std::vector<const xAOD::IParticle*> tomatch = {els->at(i), els->at(j)};
+      bool result = matchtool.match(tomatch,chain_name,0.1);
+      std::cout << "combination matched: " << result << std::endl;
+    }
+  }
+}
+
 int main( int argc, char* argv[] ) {
 
    // Get the application's name:
@@ -56,11 +100,12 @@ int main( int argc, char* argv[] ) {
   // Create the trigger configuration tool:
   TrigConf::xAODConfigTool configTool( "TrigConf::xAODConfigTool" );
   configTool.initialize().ignore();
-  Trig::TrigDecisionTool trigDecTool("TrigDecTool");
+  Trig::TrigDecisionTool trigDecTool("TrigDecisionTool");
   trigDecTool.initialize().ignore();
 
   Trig::MatchingTool trigMatchTool("TriggerMatchingTool");
   trigMatchTool.initialize().ignore();
+  trigMatchTool.setProperty("OutputLevel",MSG::DEBUG);
 
   
   // Loop over a few events:
@@ -68,16 +113,11 @@ int main( int argc, char* argv[] ) {
                                event.getEntries() );
   for( ::Long64_t entry = 0; entry < entries; ++entry ) {
     // Get the current entry:
-
     event.getEntry( entry );
-
-    // Print some additional info for the first 10 events:
     ::Info( APP_NAME, "Processing entry %i", static_cast< int >( entry ) );
 
-    bool passedHLT = trigDecTool.isPassed("HLT_.*");
-
-    
-    
+    singleElectronTriggerAnalysis(sgtevent,trigDecTool,trigMatchTool);
+    diLeptonTriggerAnalysis(sgtevent,trigDecTool,trigMatchTool);
   }
   // Return gracefully:
   return 0;
