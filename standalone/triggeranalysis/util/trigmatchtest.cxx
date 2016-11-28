@@ -30,12 +30,16 @@
 
 #include "xAODEgamma/ElectronContainer.h"
 
+#include "xAODMuon/MuonContainer.h"
 
-void singleElectronTriggerAnalysis(asg::SgTEvent& event, Trig::TrigDecisionTool& tdt, Trig::MatchingTool& matchtool){
+void singleElectronTriggerAnalysis(asg::SgTEvent& event, Trig::TrigDecisionTool& tdt, Trig::IMatchingTool& matchtool){
   if(! tdt.isPassed("HLT_e14_tight")){
     std::cout << "single electron trigger did not pass.. " << std::endl;
     return;
   }
+
+
+
   std::cout << "single el passed" << std::endl;
 
   const xAOD::ElectronContainer* els = 0;
@@ -44,9 +48,73 @@ void singleElectronTriggerAnalysis(asg::SgTEvent& event, Trig::TrigDecisionTool&
   
   int i = 0;
   for(auto x : *els){
-    bool matched = matchtool.match(*x,"HLT_e14_tight",0.1);
-    std::cout << "electron " << i << " matched? " << matched << std::endl;
+    ::Info("singleElectronTrigger", "matching a reco electron...");
+
+
+    std::vector<const xAOD::IParticle*> tomatch = {x};
+    auto matchresult = matchtool.match_result(tomatch,"HLT_e14_tight");
+    std::cout << "from result object: " << matchresult->isMatched() << std::endl;
+    if(matchresult->isMatched()){
+      auto matchobjs = matchresult->bestMatchedObjects();
+      
+      
+      std::cout << "reco object is: " << x->eta() << " / " << x->phi() << std::endl; 
+      std::cout << "trigger object is: " << matchobjs.at(0)->eta() << " / " << matchobjs.at(0)->phi() << std::endl; 
+      
+    }
     i++;
+  }
+  ::Info("singleElectronTrigger", "done");
+}
+
+void electronMuonTriggerAnalysis(asg::SgTEvent& event, Trig::TrigDecisionTool& tdt, Trig::IMatchingTool& matchtool){
+  std::string chain_name("HLT_e17_lhloose_mu");
+  if(! tdt.isPassed(chain_name)){
+    std::cout << "mixed trigger did not pass.. " << std::endl;
+    return;
+  }  
+  std::cout << "mixed passed" << std::endl;
+  
+  const xAOD::ElectronContainer* els = 0;
+  event.retrieve(els,"Electrons");
+
+  const xAOD::MuonContainer* mus = 0;
+  event.retrieve(mus,"Muons");
+
+  std::cout << "there are " << els->size() << " electrons and " << mus->size() << " muons" << std::endl;
+  
+}
+
+void subsetMatching(asg::SgTEvent& event, Trig::TrigDecisionTool& tdt, Trig::IMatchingTool& matchtool){
+  std::string chain_name("HLT_2e17_loose");
+  if(! tdt.isPassed(chain_name)){
+    std::cout << "subset.... di-electron trigger did not pass.. " << std::endl;
+    return;
+  }  
+
+  const xAOD::ElectronContainer* els = 0;
+  event.retrieve(els,"Electrons");
+  
+  for(int i = 0;i < els->size(); ++i){
+    std::vector<const xAOD::IParticle*> tomatch = {els->at(i)};
+    auto matchresult = matchtool.match_result(tomatch,chain_name);
+    
+    if(matchresult->isMatched()){
+      auto matchobjs = matchresult->bestMatchedObjects();
+      
+      for(int k = 0; k < tomatch.size(); ++k ){
+	std::cout << "subset reco object is: " << tomatch.at(k)->eta() << " / " << tomatch.at(k)->phi() << std::endl; 
+	std::cout << "subset trigger object is: " << matchobjs.at(k)->eta() << " / " << matchobjs.at(k)->phi() << std::endl; 
+	
+      }//all reco objs
+    }//if matched
+  }//for electron
+}
+
+void compareObjLists(std::vector<const xAOD::IParticle*>& recos, std::vector<const xAOD::IParticle*>& trigs){
+  for (int k = 0; k < recos.size(); ++k){
+    std::cout << "reco object is: " << recos.at(k)->eta() << " / " << recos.at(k)->phi() << std::endl; 
+    std::cout << "trigger object is: " << trigs.at(k)->eta() << " / " << trigs.at(k)->phi() << std::endl; 
   }
 }
 
@@ -65,9 +133,32 @@ void diLeptonTriggerAnalysis(asg::SgTEvent& event, Trig::TrigDecisionTool& tdt, 
   for(int i = 0;i < els->size(); ++i){
     for(int j = i+1; j < els->size(); ++j){
       std::cout << "contructing pair from indices: i: " << i << " j: " << j << std::endl;
-      std::vector<const xAOD::IParticle*> tomatch = {els->at(i), els->at(j)};
-      bool result = matchtool.match(tomatch,chain_name,0.1);
-      std::cout << "combination matched: " << result << std::endl;
+
+
+      {
+	std::vector<const xAOD::IParticle*> tomatch = {els->at(i), els->at(j)};
+	auto matchresult = matchtool.match_result(tomatch,chain_name);
+	std::cout << "from result object: " << matchresult->isMatched() << std::endl;
+	if(matchresult->isMatched()){
+	  auto matchobjs = matchresult->bestMatchedObjects();
+	  compareObjLists(tomatch,matchobjs);
+	}
+      }
+
+      //try other order:
+
+      {
+	std::cout << "other order" << std::endl;
+	std::vector<const xAOD::IParticle*> tomatch = {els->at(j), els->at(i)};
+	auto matchresult = matchtool.match_result(tomatch,chain_name);
+	std::cout << "from result object: " << matchresult->isMatched() << std::endl;
+	if(matchresult->isMatched()){
+	  auto matchobjs = matchresult->bestMatchedObjects();
+	  compareObjLists(tomatch,matchobjs);
+	}
+	std::cout << "other order done" << std::endl;
+      }
+      
     }
   }
 }
@@ -102,7 +193,7 @@ int main( int argc, char* argv[] ) {
   configTool.initialize().ignore();
   Trig::TrigDecisionTool trigDecTool("TrigDecisionTool");
   trigDecTool.initialize().ignore();
-
+  
   Trig::MatchingTool trigMatchTool("TriggerMatchingTool");
   trigMatchTool.initialize().ignore();
   trigMatchTool.setProperty("OutputLevel",MSG::DEBUG);
@@ -116,8 +207,10 @@ int main( int argc, char* argv[] ) {
     event.getEntry( entry );
     ::Info( APP_NAME, "Processing entry %i", static_cast< int >( entry ) );
 
-    singleElectronTriggerAnalysis(sgtevent,trigDecTool,trigMatchTool);
+    //    singleElectronTriggerAnalysis(sgtevent,trigDecTool,trigMatchTool);
     diLeptonTriggerAnalysis(sgtevent,trigDecTool,trigMatchTool);
+    //    electronMuonTriggerAnalysis(sgtevent,trigDecTool,trigMatchTool);
+    //    subsetMatching(sgtevent,trigDecTool,trigMatchTool);
   }
   // Return gracefully:
   return 0;
