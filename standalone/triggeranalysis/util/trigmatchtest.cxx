@@ -25,6 +25,8 @@
 
 #include "TriggerMatchingTool/MatchingTool.h"
 
+#include "TriggerMatchingTool/MatchConfig.h"
+
 #include "xAODTrigMissingET/TrigMissingETContainer.h"
 #include "xAODBTagging/BTaggingContainer.h"
 
@@ -137,6 +139,9 @@ void diLeptonTriggerAnalysis(asg::SgTEvent& event, Trig::TrigDecisionTool& tdt, 
 
       {
 	std::vector<const xAOD::IParticle*> tomatch = {els->at(i), els->at(j)};
+
+	auto matchbool = matchtool.match(tomatch,chain_name,{{xAOD::Type::Electron, 0.9}});
+	  
 	auto matchresult = matchtool.match_result(tomatch,chain_name);
 	std::cout << "from result object: " << matchresult->isMatched() << std::endl;
 	if(matchresult->isMatched()){
@@ -200,17 +205,17 @@ int main( int argc, char* argv[] ) {
 
   
   // Loop over a few events:
-  const ::Long64_t entries = ( event.getEntries() > 10 ? 10 :
+  const ::Long64_t entries = ( event.getEntries() > 1000 ? 1000 :
                                event.getEntries() );
   for( ::Long64_t entry = 0; entry < entries; ++entry ) {
     // Get the current entry:
     event.getEntry( entry );
     ::Info( APP_NAME, "Processing entry %i", static_cast< int >( entry ) );
 
-    //    singleElectronTriggerAnalysis(sgtevent,trigDecTool,trigMatchTool);
+    //singleElectronTriggerAnalysis(sgtevent,trigDecTool,trigMatchTool);
     diLeptonTriggerAnalysis(sgtevent,trigDecTool,trigMatchTool);
-    //    electronMuonTriggerAnalysis(sgtevent,trigDecTool,trigMatchTool);
-    //    subsetMatching(sgtevent,trigDecTool,trigMatchTool);
+    electronMuonTriggerAnalysis(sgtevent,trigDecTool,trigMatchTool);
+    //subsetMatching(sgtevent,trigDecTool,trigMatchTool);
   }
   // Return gracefully:
   return 0;
